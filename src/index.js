@@ -96,7 +96,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const systemPrompt = (country, age, gender, language)=> `
+const systemPrompt = (country, age, gender, language) => `
 We have provided context information below.
 
 I have to be friendly AI Health Professional for rural users. Give short, simple, factual replies.
@@ -210,8 +210,33 @@ app.post('/', async (req, res) => {
       }
     }
 
-    else if (userData.user.onboarding_stage === "done"){
-      reply = await getAiResponse(req.body.Body, systemPrompt(userData.user.country, userData.user.age, userData.user.gender, userData.user.language));
+    else if (userData.user.onboarding_stage === "done") {
+      //reply = await getAiResponse(req.body.Body, systemPrompt(userData.user.country, userData.user.age, userData.user.gender, userData.user.language));
+      let history = userData.user.message_history;
+
+      if (history === null) history = [
+        { role: 'system', content: systemPrompt(userData.user.country, userData.user.age, userData.user.gender, userData.user.language) }
+      ];
+
+      history.push({ role: 'user', content: req.body.Body });
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini', // fast, cheap, great for chatbots
+          messages: history
+        });
+
+        reply = completion.choices[0].message.content.trim();
+
+        history.push({ role: 'assistant', content: reply });
+
+        await updateUserFields(phone, {
+          message_history: history
+        });
+      }
+      catch (err) {
+        console.error('❌ OpenAI error:', err.message);
+      }
     }
   }
 
